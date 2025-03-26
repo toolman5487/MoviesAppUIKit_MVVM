@@ -42,7 +42,6 @@ class MoviesViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
         setupUI()
         viewModel.$loadingCompleted
             .receive(on: DispatchQueue.main)
@@ -53,6 +52,10 @@ class MoviesViewController: UIViewController {
                 }
             }.store(in: &cancellables)
         
+    }
+    
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        view.endEditing(true)
     }
     
     private func setupUI() {
@@ -84,7 +87,7 @@ extension MoviesViewController: UITableViewDelegate, UITableViewDataSource {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         viewModel.movies.count
     }
-    
+    /*
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "MovieTableViewCell", for: indexPath)
         let movie = viewModel.movies[indexPath.row]
@@ -119,12 +122,60 @@ extension MoviesViewController: UITableViewDelegate, UITableViewDataSource {
         
         
         return cell
+    }*/
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: "MovieTableViewCell", for: indexPath)
+        let movie = viewModel.movies[indexPath.row]
+        
+        // 先設定預設內容，不顯示圖片，避免 cell 顯示空白
+        var content = cell.defaultContentConfiguration()
+        content.text = movie.title
+        content.secondaryText = movie.year
+        content.image = nil
+        cell.contentConfiguration = content
+        
+        // 安全解包 poster，如果 poster 存在且不為空，才嘗試下載圖片
+        if let posterString = movie.poster, !posterString.isEmpty, let url = URL(string: posterString) {
+            URLSession.shared.dataTask(with: url) { data, _, _ in
+                if let data = data, let image = UIImage(data: data) {
+                    DispatchQueue.main.async {
+                        var updatedContent = cell.defaultContentConfiguration()
+                        updatedContent.text = movie.title
+                        updatedContent.secondaryText = movie.year
+                        updatedContent.imageProperties.maximumSize = CGSize(width: 60, height: 60)
+                        let resizedImage = image.preparingThumbnail(of: CGSize(width: 60, height: 60)) ?? image
+                        updatedContent.image = resizedImage
+                        cell.contentConfiguration = updatedContent
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        var fallbackContent = cell.defaultContentConfiguration()
+                        fallbackContent.text = movie.title
+                        fallbackContent.secondaryText = movie.year
+                        fallbackContent.image = UIImage(systemName: "film")
+                        cell.contentConfiguration = fallbackContent
+                    }
+                }
+            }.resume()
+        } else {
+            // 如果 poster 為 nil 或空字串，直接使用預設圖片
+            var fallbackContent = cell.defaultContentConfiguration()
+            fallbackContent.text = movie.title
+            fallbackContent.secondaryText = movie.year
+            fallbackContent.image = UIImage(systemName: "film")
+            cell.contentConfiguration = fallbackContent
+        }
+        
+        return cell
     }
 }
 
 extension MoviesViewController: UISearchBarDelegate {
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
         viewModel.setSearchText(searchText)
+    }
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        searchBar.resignFirstResponder()
     }
 }
 
