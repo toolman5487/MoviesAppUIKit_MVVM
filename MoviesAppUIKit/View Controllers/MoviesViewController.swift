@@ -31,7 +31,7 @@ class MoviesViewController: UIViewController {
         searchBar.delegate = self
         return searchBar
     }()
-        
+    
     lazy var moviesTableView: UITableView = {
         let tableView = UITableView()
         tableView.translatesAutoresizingMaskIntoConstraints = false
@@ -39,9 +39,10 @@ class MoviesViewController: UIViewController {
         tableView.dataSource = self
         return tableView
     }()
-        
+    
     override func viewDidLoad() {
         super.viewDidLoad()
+        
         setupUI()
         viewModel.$loadingCompleted
             .receive(on: DispatchQueue.main)
@@ -53,7 +54,7 @@ class MoviesViewController: UIViewController {
             }.store(in: &cancellables)
         
     }
-        
+    
     private func setupUI() {
         view.backgroundColor = .white
         moviesTableView.register(UITableViewCell.self, forCellReuseIdentifier: "MovieTableViewCell")
@@ -81,22 +82,49 @@ class MoviesViewController: UIViewController {
 extension MoviesViewController: UITableViewDelegate, UITableViewDataSource {
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        10
+        viewModel.movies.count
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        
         let cell = tableView.dequeueReusableCell(withIdentifier: "MovieTableViewCell", for: indexPath)
+        let movie = viewModel.movies[indexPath.row]
         var content = cell.defaultContentConfiguration()
-        content.text = "Hello World"
+        content.text = movie.title
+        content.secondaryText = movie.year
+        content.image = nil
         cell.contentConfiguration = content
+        
+        if let url = URL(string: movie.poster!) {
+            URLSession.shared.dataTask(with: url) { data, _, _ in
+                if let data = data, let image = UIImage(data: data) {
+                    DispatchQueue.main.async {
+                        var updatedContent = cell.defaultContentConfiguration()
+                        updatedContent.text = movie.title
+                        updatedContent.secondaryText = movie.year
+                        updatedContent.imageProperties.maximumSize = CGSize(width: 60, height: 60)
+                        let resizedImage = image.preparingThumbnail(of: CGSize(width: 60, height: 60)) ?? image
+                        updatedContent.image = resizedImage
+                        cell.contentConfiguration = updatedContent
+                    }
+                } else {
+                    // 若 poster 為空或無效，使用預設圖示
+                    var fallbackContent = cell.defaultContentConfiguration()
+                    fallbackContent.text = movie.title
+                    fallbackContent.secondaryText = movie.year
+                    fallbackContent.image = UIImage(systemName: "film")
+                    cell.contentConfiguration = fallbackContent
+                }
+            }.resume()
+        }
+        
+        
         return cell
     }
 }
 
 extension MoviesViewController: UISearchBarDelegate {
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
-        <#code#>
+        viewModel.setSearchText(searchText)
     }
 }
 
@@ -116,5 +144,3 @@ struct MoviesViewControllerRepresentable: UIViewControllerRepresentable {
 #Preview {
     MoviesViewControllerRepresentable()
 }
-
-
